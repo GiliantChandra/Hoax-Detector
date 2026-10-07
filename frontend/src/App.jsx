@@ -13,9 +13,10 @@ function App() {
     
     setIsLoading(true);
     setError(null);
+    setResult(null);
     
     try {
-      const response = await fetch('http://localhost:8000/api/analyze/text', {
+      const response = await fetch('http://localhost:8000/api/v1/demo/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text })
@@ -34,43 +35,46 @@ function App() {
     }
   };
 
-  const getRiskColor = (label) => {
-    if (label === 'high') return 'risk-high';
-    if (label === 'medium') return 'risk-medium';
-    if (label === 'low') return 'risk-low';
-    return 'risk-unknown';
-  };
-
-  const getRiskIcon = (label) => {
-    if (label === 'high') return <ShieldAlert size={24} />;
-    if (label === 'low') return <ShieldCheck size={24} />;
-    return <Shield size={24} />;
-  };
-
-  const getRiskLabelText = (label) => {
-    if (label === 'high') return 'HIGH RISK';
-    if (label === 'medium') return 'MEDIUM RISK';
-    if (label === 'low') return 'LOW RISK';
-    if (label === 'insufficient_text') return 'INSUFFICIENT TEXT';
-    return label.toUpperCase();
+  const renderEvidenceList = (title, items, icon) => {
+    if (!items || items.length === 0) return null;
+    return (
+      <div className="evidence-section" style={{ marginTop: '1.5rem', textAlign: 'left' }}>
+        <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+          {icon} {title} ({items.length})
+        </h4>
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          {items.map((item, i) => (
+            <li key={i} style={{ padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '0.5rem', borderLeft: '4px solid #3b82f6' }}>
+              <strong><a href={item.url} target="_blank" rel="noreferrer" style={{ color: '#60a5fa', textDecoration: 'none' }}>{item.title}</a></strong>
+              <div style={{ fontSize: '0.85rem', color: '#9ca3af', marginTop: '0.5rem', display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
+                <span><strong>Source:</strong> {item.domain}</span>
+                <span><strong>Tier:</strong> {item.extra.source_reliability_tier?.toUpperCase() || 'UNKNOWN'}</span>
+                <span><strong>NLI:</strong> {item.extra.nli_label?.toUpperCase()}</span>
+                {item.published_at && <span><strong>Date:</strong> {new Date(item.published_at).toLocaleDateString()}</span>}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
   };
 
   return (
     <div className="app-container animate-fade-in">
       <header className="header">
-        <h1>Digital Trust Assistant</h1>
-        <p>Smart News & Information Verifier Powered by AI</p>
+        <h1>Hoax-Detector</h1>
+        <p>Evidence-based Verification System</p>
       </header>
 
       <main>
         <div className="glass-panel input-section">
           <label className="input-label" htmlFor="news-text">
-            Paste News Content to Verify
+            Enter Claim to Verify
           </label>
           <textarea 
             id="news-text"
             className="text-input" 
-            placeholder="Paste the article text, claim, or news report here..."
+            placeholder="e.g. Bawang putih dapat menyembuhkan COVID-19."
             value={text}
             onChange={(e) => setText(e.target.value)}
           />
@@ -84,71 +88,70 @@ function App() {
           <button 
             className="btn-analyze" 
             onClick={handleAnalyze} 
-            disabled={isLoading || text.length < 10}
+            disabled={isLoading || text.length < 5}
           >
             {isLoading ? (
-              <><span className="loader"></span> Analyzing Content...</>
+              <><span className="loader"></span> Retrieving & Analyzing Evidence...</>
             ) : (
-              <>Analyze Risk Score <ArrowRight size={20} /></>
+              <>Verify Claim <ArrowRight size={20} /></>
             )}
           </button>
         </div>
 
         {result && (
-          <div className="glass-panel result-section animate-fade-in">
+          <div className="glass-panel result-section animate-fade-in" style={{ maxWidth: '800px' }}>
             <div className="result-header">
               <div className="result-title">
-                <Activity size={24} color="#3b82f6" /> Analysis Results
-              </div>
-              <div className={`risk-badge ${getRiskColor(result.risk_label)}`}>
-                {getRiskLabelText(result.risk_label)}
+                <Activity size={24} color="#3b82f6" /> Evidence Analysis
               </div>
             </div>
 
-            {result.risk_score !== null ? (
-              <div className="score-container">
-                <div className="score-circle" data-risk={result.risk_label}>
-                  <div className="score-value">{Math.round(result.risk_score * 100)}</div>
-                  <div className="score-label">Trust Risk %</div>
-                </div>
-                <p style={{ color: 'var(--text-muted)' }}>
-                  This content shows a <strong>{Math.round(result.risk_score * 100)}%</strong> probability of containing linguistic risk patterns.
-                </p>
+            {result.evidence_coverage === 'INSUFFICIENT' ? (
+              <div style={{ textAlign: 'center', padding: '2rem' }}>
+                <AlertTriangle size={48} color="#f59e0b" style={{ margin: '0 auto 1rem' }} />
+                <h3>Bukti belum cukup</h3>
+                <p style={{ color: 'var(--text-muted)' }}>Sistem tidak menemukan sumber kredibel yang relevan untuk memverifikasi klaim ini.</p>
               </div>
             ) : (
-              <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
-                No score generated.
-              </div>
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '2rem' }}>
+                  <div style={{ background: 'rgba(59, 130, 246, 0.1)', padding: '1.5rem', borderRadius: '12px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#60a5fa' }}>{Math.round(result.support_score * 100)}%</div>
+                    <div style={{ color: '#9ca3af', fontSize: '0.9rem' }}>Support Score</div>
+                  </div>
+                  <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '1.5rem', borderRadius: '12px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#f87171' }}>{Math.round(result.contradiction_score * 100)}%</div>
+                    <div style={{ color: '#9ca3af', fontSize: '0.9rem' }}>Contradiction Score</div>
+                  </div>
+                </div>
+
+                <div className="metadata-box" style={{ marginBottom: '2rem' }}>
+                  <div className="meta-item">
+                    <strong>Evidence Coverage</strong>
+                    {result.evidence_coverage}
+                  </div>
+                  <div className="meta-item">
+                    <strong>Independent Clusters</strong>
+                    {result.independent_evidence_count}
+                  </div>
+                  <div className="meta-item">
+                    <strong>Conflicting Evidence</strong>
+                    {result.conflicting_evidence ? "Yes" : "No"}
+                  </div>
+                </div>
+
+                {renderEvidenceList("Supporting Evidence", result.supporting_evidence, <ShieldCheck size={20} color="#60a5fa" />)}
+                {renderEvidenceList("Contradicting Evidence", result.contradicting_evidence, <ShieldAlert size={20} color="#f87171" />)}
+                {renderEvidenceList("Neutral Evidence", result.neutral_evidence, <Info size={20} color="#9ca3af" />)}
+
+                <div className="notice-banner" style={{ marginTop: '2rem' }}>
+                  <Info size={24} style={{ flexShrink: 0 }} />
+                  <div style={{ fontSize: '0.9rem' }}>
+                    <strong>Note:</strong> <em>Source Reliability</em> digunakan sebagai bobot kepercayaan terhadap suatu argumen, BUKAN sebagai penentu akhir benar/salah (truth detector). Analisis NLI hanya memetakan <em>stance</em> bukti.
+                  </div>
+                </div>
+              </>
             )}
-
-            {result.reason && (
-              <div className="result-reason">
-                <h4>System Observation</h4>
-                <p>{result.reason}</p>
-              </div>
-            )}
-
-            <div className="metadata-box">
-              <div className="meta-item">
-                <strong>Model Version</strong>
-                {result.model_version}
-              </div>
-              <div className="meta-item">
-                <strong>Training Data</strong>
-                {result.training_dataset_status.toUpperCase()} (Smoke Test)
-              </div>
-              <div className="meta-item">
-                <strong>Signal Type</strong>
-                {result.signal}
-              </div>
-            </div>
-
-            <div className="notice-banner">
-              <Info size={24} style={{ flexShrink: 0 }} />
-              <div>
-                <strong>Important Notice:</strong> {result.notice}
-              </div>
-            </div>
           </div>
         )}
       </main>
